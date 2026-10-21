@@ -11,6 +11,9 @@ The objective is to analyze industrial operating conditions, visualize failure p
 
 An animated GIF illustrates the distribution of normal operating conditions and recorded machine failures.
 
+## Visualisation
+https://github.com/tekyamba5-lgtm/Industrial-Predictive-Maintenance/blob/main/predictive_maintenance_animation.gif
+
 ## Dataset
 
 Dataset: AI4I 2020 Predictive Maintenance Dataset
