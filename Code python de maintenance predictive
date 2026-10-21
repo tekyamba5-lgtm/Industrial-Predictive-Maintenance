@@ -1,0 +1,457 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+import os
+import io
+
+# ==========================================
+# 1. CHARGEMENT DU DATASET
+# ==========================================
+
+folder = "/storage/emulated/0/Documents"
+
+file_path = os.path.join(
+    folder,
+    "predictive maintenance dataset 1.csv"
+)
+
+if not os.path.exists(file_path):
+    raise FileNotFoundError(
+        "Dataset introuvable : " + file_path
+    )
+
+df = pd.read_csv(file_path)
+
+df.columns = df.columns.str.strip()
+
+print("INDUSTRIAL PREDICTIVE MAINTENANCE")
+print("=" * 45)
+
+print("\nDimensions du dataset :")
+print(df.shape)
+
+print("\nPremières observations :")
+print(df.head())
+
+print("\nColonnes disponibles :")
+print(df.columns.tolist())
+
+# ==========================================
+# 2. SÉLECTION DES PARAMÈTRES
+# ==========================================
+
+x = "Rotational speed [rpm]"
+y = "Torque [Nm]"
+target = "Machine failure"
+
+required_columns = [x, y, target]
+
+for col in required_columns:
+    if col not in df.columns:
+        raise ValueError(
+            "Colonne introuvable : " + col
+        )
+
+# Conversion numérique
+
+for col in required_columns:
+    df[col] = pd.to_numeric(
+        df[col],
+        errors="coerce"
+    )
+
+# Nettoyage des données
+
+df = df.replace(
+    [np.inf, -np.inf],
+    np.nan
+)
+
+df = df.dropna(
+    subset=required_columns
+).copy()
+
+df = df[
+    df[target].isin([0, 1])
+].copy()
+
+if len(df) == 0:
+    raise ValueError(
+        "Aucune donnée valide disponible."
+    )
+
+# ==========================================
+# 3. ANALYSE DES DÉFAILLANCES
+# ==========================================
+
+normal = df[df[target] == 0]
+failure = df[df[target] == 1]
+
+total = len(df)
+
+failure_rate = (
+    len(failure) / total * 100
+)
+
+print("\nRÉSULTATS")
+print("-" * 45)
+
+print("Total observations :", total)
+print("Normal operation :", len(normal))
+print("Machine failure :", len(failure))
+
+print(
+    f"Failure rate : {failure_rate:.2f}%"
+)
+
+# ==========================================
+# 4. PRÉPARATION DU GRAPHIQUE
+# ==========================================
+
+fig, ax = plt.subplots(
+    figsize=(10, 7)
+)
+
+# Limites fixes des axes
+
+x_min = df[x].min()
+x_max = df[x].max()
+
+y_min = df[y].min()
+y_max = df[y].max()
+
+x_margin = max(
+    (x_max - x_min) * 0.05,
+    1
+)
+
+y_margin = max(
+    (y_max - y_min) * 0.05,
+    1
+)
+
+ax.set_xlim(
+    x_min - x_margin,
+    x_max + x_margin
+)
+
+ax.set_ylim(
+    y_min - y_margin,
+    y_max + y_margin
+)
+
+ax.set_title(
+    "INDUSTRIAL PREDICTIVE MAINTENANCE\n"
+    "Rotational Speed vs Torque",
+    fontsize=14,
+    fontweight="bold",
+    pad=15
+)
+
+ax.set_xlabel(
+    "Rotational Speed (RPM)",
+    fontsize=12
+)
+
+ax.set_ylabel(
+    "Torque (Nm)",
+    fontsize=12
+)
+
+ax.grid(
+    True,
+    linestyle="--",
+    alpha=0.3
+)
+
+# ==========================================
+# 5. INITIALISATION DES POINTS
+# ==========================================
+
+normal_scatter = ax.scatter(
+    [],
+    [],
+    color="green",
+    s=22,
+    alpha=0.45,
+    label="Normal Operation",
+    edgecolors="none"
+)
+
+failure_scatter = ax.scatter(
+    [],
+    [],
+    color="red",
+    s=48,
+    alpha=0.9,
+    label="Machine Failure",
+    edgecolors="black",
+    linewidths=0.3
+)
+
+ax.legend(
+    title="Machine Condition",
+    loc="upper right"
+)
+
+# Informations statistiques
+
+info_text = ax.text(
+    0.02,
+    0.98,
+    "",
+    transform=ax.transAxes,
+    fontsize=10,
+    verticalalignment="top",
+    bbox=dict(
+        boxstyle="round",
+        facecolor="white",
+        alpha=0.85
+    )
+)
+
+progress_text = ax.text(
+    0.5,
+    0.03,
+    "",
+    transform=ax.transAxes,
+    fontsize=11,
+    ha="center",
+    bbox=dict(
+        facecolor="white",
+        alpha=0.8
+    )
+)
+
+plt.tight_layout()
+
+# ==========================================
+# 6. FONCTION DE MISE À JOUR
+# ==========================================
+
+# Mélange des observations pour
+# une apparition progressive
+
+animation_df = df.sample(
+    frac=1,
+    random_state=42
+).reset_index(drop=True)
+
+def update_plot(n):
+
+    current = animation_df.iloc[:n]
+
+    current_normal = current[
+        current[target] == 0
+    ]
+
+    current_failure = current[
+        current[target] == 1
+    ]
+
+    # Mise à jour des points verts
+
+    normal_points = current_normal[
+        [x, y]
+    ].to_numpy()
+
+    normal_scatter.set_offsets(
+        normal_points.reshape(-1, 2)
+    )
+
+    # Mise à jour des points rouges
+
+    failure_points = current_failure[
+        [x, y]
+    ].to_numpy()
+
+    failure_scatter.set_offsets(
+        failure_points.reshape(-1, 2)
+    )
+
+    # Calcul des statistiques
+
+    current_total = len(current)
+
+    current_failures = len(
+        current_failure
+    )
+
+    current_rate = (
+        current_failures / current_total * 100
+        if current_total > 0
+        else 0
+    )
+
+    info = (
+        f"Total observations: {current_total}\n"
+        f"Normal: {len(current_normal)}\n"
+        f"Failures: {current_failures}\n"
+        f"Failure rate: {current_rate:.2f}%"
+    )
+
+    info_text.set_text(info)
+
+    progress = (
+        current_total / total * 100
+    )
+
+    progress_text.set_text(
+        f"Data Visualization: {progress:.0f}%"
+    )
+
+    return (
+        normal_scatter,
+        failure_scatter,
+        info_text,
+        progress_text
+    )
+
+# ==========================================
+# 7. ENREGISTREMENT DU GRAPHIQUE PNG
+# ==========================================
+
+print("\nCréation du graphique PNG...")
+
+update_plot(total)
+
+png_path = os.path.join(
+    folder,
+    "predictive_maintenance_visualization.png"
+)
+
+fig.savefig(
+    png_path,
+    dpi=300,
+    bbox_inches="tight"
+)
+
+print("Graphique PNG enregistré.")
+
+# ==========================================
+# 8. CRÉATION DE L'ANIMATION GIF
+# ==========================================
+
+print("\nCréation de l'animation GIF...")
+
+gif_path = os.path.join(
+    folder,
+    "predictive_maintenance_animation.gif"
+)
+
+# 25 images pour limiter
+# la consommation de mémoire
+
+n_frames = 25
+
+frame_sizes = np.linspace(
+    1,
+    total,
+    n_frames,
+    dtype=int
+)
+
+frames = []
+
+for i, size in enumerate(frame_sizes):
+
+    update_plot(size)
+
+    buffer = io.BytesIO()
+
+    fig.savefig(
+        buffer,
+        format="png",
+        dpi=65
+    )
+
+    buffer.seek(0)
+
+    with Image.open(buffer) as img:
+
+        frame = img.convert(
+            "RGB"
+        ).copy()
+
+    buffer.close()
+
+    # Réduction du nombre de couleurs
+    # pour alléger le GIF
+
+    frame = frame.quantize(
+        colors=128
+    )
+
+    frames.append(frame)
+
+    print(
+        f"Animation : {i + 1}/{n_frames}"
+    )
+
+# ==========================================
+# 9. ENREGISTREMENT DU GIF
+# ==========================================
+
+# Dernière image affichée plus longtemps
+
+durations = (
+    [180] * (n_frames - 1)
+    + [2000]
+)
+
+frames[0].save(
+    gif_path,
+    save_all=True,
+    append_images=frames[1:],
+    duration=durations,
+    loop=0,
+    optimize=False
+)
+
+for frame in frames:
+    frame.close()
+
+print("\nAnimation GIF enregistrée.")
+
+# ==========================================
+# 10. AFFICHAGE FINAL
+# ==========================================
+
+update_plot(total)
+
+plt.show()
+
+plt.close(fig)
+
+# ==========================================
+# 11. RAPPORT FINAL
+# ==========================================
+
+print("\n" + "=" * 50)
+
+print("PROJECT COMPLETED SUCCESSFULLY")
+
+print("=" * 50)
+
+print("\nINDUSTRIAL STATISTICS")
+
+print("Total observations :", total)
+
+print("Normal operation :", len(normal))
+
+print("Machine failures :", len(failure))
+
+print(
+    f"Failure rate : {failure_rate:.2f}%"
+)
+
+print("\nFILES GENERATED")
+
+print("\n1. Static Visualization:")
+print(png_path)
+
+print("\n2. Animated GIF:")
+print(gif_path)
+
+print("\nPROJECT COMPLETED!")
